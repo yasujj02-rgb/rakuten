@@ -1,0 +1,20 @@
+# ローカル開発用（wrangler dev が読み込む）。このファイルを .dev.vars にコピーして値を設定する。
+# .dev.vars は .gitignore 済み。実際の値をコミットしないこと。
+
+ENVIRONMENT=development
+# auto: 認証情報があれば実API、無ければモック / mock / live
+DATA_MODE=auto
+# development では none を許可（本番では無効）
+AUTH_MODE=none
+
+# 楽天ウェブサービス（https://webservice.rakuten.co.jp/ でアプリ登録して取得）
+RAKUTEN_APPLICATION_ID=
+RAKUTEN_ACCESS_KEY=
+# 任意：楽天アフィリエイトID（設定するとアフィリエイトURLを取得）
+RAKUTEN_AFFILIATE_ID=
+# アプリ登録時に許可したサイトURL（Referer として送信）
+RAKUTEN_REFERER=http://localhost:8787/
+# 任意：エンドポイント上書き（API バージョン変更時）
+# RAKUTEN_ENDPOINT=https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260701
+# 任意：accessKey の送り方 query | header
+# RAKUTEN_ACCESS_KEY_TRANSPORT=query

@@ -1,0 +1,41 @@
+{
+  "name": "netprice-watch",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "実質最安値 Watch — 楽天市場のポイント還元込み実質価格比較",
+  "scripts": {
+    "dev": "vite",
+    "dev:worker": "wrangler dev --port 8787",
+    "build": "tsc -b && vite build",
+    "preview": "npm run build && wrangler dev --port 8787",
+    "typecheck": "tsc -b --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test --trace off",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build && npm run test:e2e && node scripts/check-bundle-secrets.mjs",
+    "deploy": "npm run build && wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261125.1",
+    "@eslint/js": "^9.39.5",
+    "@playwright/test": "1.63.0",
+    "@types/node": "^22.20.7",
+    "@types/react": "^19.3.3",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.74.0",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.2",
+    "wrangler": "^4.168.0"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
+}

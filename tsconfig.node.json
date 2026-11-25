@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"],
+    "outDir": "./node_modules/.tsbuild/node",
+    "tsBuildInfoFile": "./node_modules/.tsbuild/node.tsbuildinfo"
+  },
+  "include": ["vite.config.ts", "vitest.config.ts", "playwright.config.ts", "tests", "src/shared", "src/worker"]
+}

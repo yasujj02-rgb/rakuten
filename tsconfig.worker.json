@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"],
+    "outDir": "./node_modules/.tsbuild/worker",
+    "tsBuildInfoFile": "./node_modules/.tsbuild/worker.tsbuildinfo"
+  },
+  "include": ["src/worker", "src/shared"]
+}
