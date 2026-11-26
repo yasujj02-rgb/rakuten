@@ -15,7 +15,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test --trace off",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build && npm run test:e2e && node scripts/check-bundle-secrets.mjs",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "build:demo": "vite build --mode demo --outDir dist/demo && node scripts/build-demo-artifact.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261125.1",

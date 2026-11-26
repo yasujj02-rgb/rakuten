@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { DEFAULT_SETTINGS, sanitizeSettings, type CampaignSetting, type PointBase, type UserSettings } from '../../shared/pricing/settings';
 
 interface Props {
@@ -60,6 +60,7 @@ function BaseSelect({ value, onChange, label }: { value: PointBase; onChange: (v
 }
 
 export function SettingsView({ settings, onChange, token, onTokenChange, onClearAll }: Props) {
+  const [confirmClear, setConfirmClear] = useState(false);
   // 入力のたびに検証して保存（ランキングは即時再計算される）
   const patch = (p: Partial<UserSettings>) => onChange(sanitizeSettings({ ...settings, ...p }));
   const camp = (key: 'kaimawari' | 'dayCampaign', p: Partial<CampaignSetting>) => patch({ [key]: { ...settings[key], ...p } });
@@ -188,16 +189,25 @@ export function SettingsView({ settings, onChange, token, onTokenChange, onClear
           <button type="button" className="btn" onClick={() => onChange(DEFAULT_SETTINGS)}>
             ポイント設定を初期値に戻す
           </button>
-          <button
-            type="button"
-            className="btn danger"
-            onClick={() => {
-              if (window.confirm('設定・履歴・お気に入り・手動補正をすべて削除しますか？')) onClearAll();
-            }}
-          >
-            端末内のデータをすべて削除
-          </button>
+          {!confirmClear && (
+            <button type="button" className="btn danger" onClick={() => setConfirmClear(true)}>
+              端末内のデータをすべて削除
+            </button>
+          )}
         </div>
+        {confirmClear && (
+          <div className="confirm-box" role="alertdialog" aria-label="データ削除の確認">
+            <p>設定・履歴・お気に入り・手動補正をすべて削除します。元に戻せません。</p>
+            <div className="row-actions">
+              <button type="button" className="btn danger" onClick={onClearAll}>
+                削除する
+              </button>
+              <button type="button" className="btn" onClick={() => setConfirmClear(false)}>
+                やめる
+              </button>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );

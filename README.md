@@ -34,6 +34,11 @@ npx wrangler dev --port 8787 --var ENVIRONMENT:development --var AUTH_MODE:none
 
 実 API を使う場合は `.dev.vars.example` を `.dev.vars` にコピーし、楽天のアプリ ID・アクセスキー・Referer を設定します（`.dev.vars` は Git 管理外）。
 
+## デモ版（ブラウザ内のみ・モックデータ）
+
+`npm run build:demo` で、サーバーなしでブラウザ内だけで動く 1 ファイルのデモ（`dist/demo-artifact.html`）を生成します。
+架空のサンプル商品のみを使い、楽天 API には接続しません。
+
 ## コマンド
 
 | コマンド | 内容 |

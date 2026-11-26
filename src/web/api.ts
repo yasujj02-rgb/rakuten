@@ -1,5 +1,6 @@
 import type { SearchQuery, SearchResponse } from '../shared/types';
 import { queryToParams } from '../shared/validation';
+import { demoSearch } from './demoApi';
 
 export class ApiClientError extends Error {
   constructor(
@@ -50,10 +51,15 @@ async function call<T>(path: string, token: string, signal?: AbortSignal): Promi
   return body as T;
 }
 
+/** `vite build --mode demo` のときだけ true（ビルド時に定数化され、通常ビルドからは除去される） */
+const DEMO = import.meta.env.MODE === 'demo';
+
 export function fetchConfig(token: string): Promise<AppConfig> {
+  if (DEMO) return Promise.resolve({ mode: 'mock', affiliateEnabled: false, maxPages: 3, development: true });
   return call<AppConfig>('/api/config', token);
 }
 
-export function searchApi(q: SearchQuery, token: string, signal?: AbortSignal): Promise<SearchResponse> {
+export async function searchApi(q: SearchQuery, token: string, signal?: AbortSignal): Promise<SearchResponse> {
+  if (DEMO) return demoSearch(q);
   return call<SearchResponse>(`/api/search?${queryToParams(q).toString()}`, token, signal);
 }

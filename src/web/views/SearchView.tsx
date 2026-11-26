@@ -325,7 +325,7 @@ export function SearchView(p: Props) {
               {p.settings.kaimawari.enabled && `＋買い回り ${p.settings.kaimawari.extraMultiplier}倍`}
               {p.settings.dayCampaign.enabled && `＋日付キャンペーン ${p.settings.dayCampaign.extraMultiplier}倍`}・1pt＝{p.settings.pointValueYen}円
             </p>
-            <a href="#/settings">ポイント設定を変更</a>
+            <a href="#point-settings">ポイント設定を変更</a>
           </section>
         </div>
       )}

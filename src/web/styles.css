@@ -22,7 +22,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #111615;
     --surface: #1a201f;
     --surface-2: #232b29;
@@ -42,6 +42,26 @@
     --shadow: none;
     color-scheme: dark;
   }
+}
+:root[data-theme='dark'] {
+  --bg: #111615;
+  --surface: #1a201f;
+  --surface-2: #232b29;
+  --text: #e8eeec;
+  --muted: #9aa7a3;
+  --border: #33403d;
+  --brand: #5fb3aa;
+  --brand-ink: #0b1513;
+  --accent: #fb923c;
+  --accent-soft: #3a2414;
+  --good: #5ad19b;
+  --good-soft: #15352a;
+  --warn: #f5c451;
+  --warn-soft: #3a3013;
+  --bad: #f87171;
+  --bad-soft: #3d1b1b;
+  --shadow: none;
+  color-scheme: dark;
 }
 
 * {
@@ -855,4 +875,15 @@ table.mini tr.current {
 }
 .site-footer p {
   margin: 4px 0;
+}
+
+.confirm-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.confirm-box p {
+  margin: 0;
 }

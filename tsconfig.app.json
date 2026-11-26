@@ -7,5 +7,5 @@
     "outDir": "./node_modules/.tsbuild/app",
     "tsBuildInfoFile": "./node_modules/.tsbuild/app.tsbuildinfo"
   },
-  "include": ["src/web", "src/shared"]
+  "include": ["src/web", "src/shared", "src/worker/rakuten/mock.ts"]
 }

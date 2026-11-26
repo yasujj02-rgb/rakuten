@@ -17,9 +17,12 @@ function subscribeHash(cb: () => void) {
   window.addEventListener('hashchange', cb);
   return () => window.removeEventListener('hashchange', cb);
 }
+/** ルートは単純なハッシュ（#search / #favorites / #point-settings）。旧形式 #/settings も受け付ける */
 function getRoute(): Route {
   const h = window.location.hash.replace(/^#\/?/, '');
-  return h === 'favorites' || h === 'settings' ? h : 'search';
+  if (h === 'favorites') return 'favorites';
+  if (h === 'point-settings' || h === 'settings') return 'settings';
+  return 'search';
 }
 
 const SEED_FAVORITES: Array<[string, string]> = [
@@ -154,7 +157,7 @@ export function App() {
     setSearchState(nextState);
     setLoading(true);
     setError(null);
-    if (getRoute() !== 'search') window.location.hash = '#/search';
+    if (getRoute() !== 'search') window.location.hash = '#search';
     try {
       const res = await searchApi(query, token, ac.signal);
       setResponse(res);
@@ -199,7 +202,7 @@ export function App() {
   const saveSearchFavorite = (s: SearchState) => {
     const exists = favorites.find((f) => f.kind === 'search' && f.query.keyword === s.query.keyword && f.categoryId === s.categoryId);
     if (exists) {
-      window.location.hash = '#/favorites';
+      window.location.hash = '#favorites';
       return;
     }
     setFavorites([
@@ -265,7 +268,7 @@ export function App() {
   return (
     <div className="app">
       <header className="site-header">
-        <a href="#/search" className="logo" aria-label="実質最安値 Watch トップ">
+        <a href="#search" className="logo" aria-label="実質最安値 Watch トップ">
           <span className="logo-mark" aria-hidden="true">
             ¥
           </span>
@@ -275,13 +278,13 @@ export function App() {
           </span>
         </a>
         <nav className="tabs" aria-label="メイン">
-          <a href="#/search" aria-current={route === 'search' ? 'page' : undefined}>
+          <a href="#search" aria-current={route === 'search' ? 'page' : undefined}>
             検索
           </a>
-          <a href="#/favorites" aria-current={route === 'favorites' ? 'page' : undefined}>
+          <a href="#favorites" aria-current={route === 'favorites' ? 'page' : undefined}>
             お気に入り
           </a>
-          <a href="#/settings" aria-current={route === 'settings' ? 'page' : undefined}>
+          <a href="#point-settings" aria-current={route === 'settings' ? 'page' : undefined}>
             設定
           </a>
         </nav>
@@ -303,7 +306,7 @@ export function App() {
           {route !== 'settings' && (
             <>
               {' '}
-              <a href="#/settings">設定でアクセストークンを確認</a>
+              <a href="#point-settings">設定でアクセストークンを確認</a>
             </>
           )}
         </div>
