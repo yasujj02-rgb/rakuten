@@ -79,6 +79,7 @@ export const CATEGORIES: Category[] = [
       'ジョイ',
       '食器用洗剤',
       '台所用洗剤',
+      '洗剤',
     ],
     taxRate: 10,
   },
@@ -148,9 +149,54 @@ export const CATEGORIES: Category[] = [
 ];
 
 export const DEFAULT_CATEGORY_ID = 'other';
+/** カテゴリ・比較単位を自動判定する指定値 */
+export const AUTO = 'auto';
+
+/** 選択可能なすべての比較単位 */
+export const ALL_UNITS: ComparisonUnit[] = Object.values(U);
+
+/** 次元ごとの既定の比較単位（自動選択で使用） */
+export const DEFAULT_UNIT_BY_DIMENSION: Record<Dimension, ComparisonUnit> = {
+  volume: U.ml100,
+  mass: U.g100,
+  length: U.m1,
+  pairs: U.pair100,
+  sheets: U.sheet1,
+  uses: U.use1,
+  meals: U.meal1,
+  pieces: U.piece1,
+};
+
+export function findUnit(id: string | null | undefined): ComparisonUnit | null {
+  return ALL_UNITS.find((u) => u.id === id) ?? null;
+}
 
 export function getCategory(id: string | null | undefined): Category {
   return CATEGORIES.find((c) => c.id === id) ?? CATEGORIES[CATEGORIES.length - 1]!;
+}
+
+/** 'auto' ならキーワードから推定、それ以外は指定カテゴリ */
+export function resolveCategory(categoryId: string | null | undefined, keyword: string): Category {
+  return !categoryId || categoryId === AUTO ? guessCategory(keyword) : getCategory(categoryId);
+}
+
+/**
+ * 商品ごとに比較単位を自動で選ぶ。
+ * 1. カテゴリの比較単位（個数系以外）で量が取れればそれを使う（例: 粉末洗剤は 0.9kg と 45回分 のうち g）
+ * 2. 取れなければ、商品の主要な次元の既定単位（ml→100ml, g→100g 等。L→ml, kg→g は換算済み）
+ * 3. それも無ければ、カテゴリが個数系の単位（1個・1本）を持つ場合のみ個数で比較
+ * いずれも無ければ null（比較対象外）。
+ */
+export function chooseUnit(q: QuantityParseResult, category: Category): ComparisonUnit | null {
+  const countLike = (u: ComparisonUnit) => u.dimension === 'pieces';
+  for (const u of category.units.filter((u) => !countLike(u))) {
+    if (selectAmount(q, u)) return u;
+  }
+  if (q.dimension) return DEFAULT_UNIT_BY_DIMENSION[q.dimension];
+  for (const u of category.units.filter(countLike)) {
+    if (selectAmount(q, u)) return u;
+  }
+  return null;
 }
 
 export function getUnit(category: Category, unitId?: string | null): ComparisonUnit {

@@ -419,6 +419,7 @@ export function parseQuantity(
       setCount: combined.hasCounts ? combined.setCount : null,
       source,
       matchedText: combined.matched,
+      candidateDimension: physicalAmbiguous[0] ?? null,
     };
   }
 

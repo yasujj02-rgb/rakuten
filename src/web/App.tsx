@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ItemOverride, UserSettings } from '../shared/pricing/settings';
-import { getCategory, getUnit } from '../shared/quantity/categories';
-import { rankProducts, type RankedRow } from '../shared/ranking';
+import { AUTO, getCategory, resolveCategory } from '../shared/quantity/categories';
+import { rankByUnits, type RankedRow } from '../shared/ranking';
 import type { SearchResponse, SortKey } from '../shared/types';
 import { validateSearchQuery, ValidationError } from '../shared/validation';
 import { ApiClientError, fetchConfig, searchApi, type AppConfig } from './api';
@@ -47,7 +47,7 @@ function initialFavorites(): Favorite[] {
       kind: 'search' as const,
       query: { keyword: kw, inStockOnly: true, pages: 1, apiSort: 'standard' as const },
       categoryId: c.id,
-      unitId: c.units[0]!.id,
+      unitId: AUTO,
       targetUnitPrice: null,
       createdAt: now,
     };
@@ -73,8 +73,8 @@ export function App() {
 
   const [searchState, setSearchState] = useState<SearchState>({
     query: { keyword: '', inStockOnly: true, pages: 1, apiSort: 'standard' },
-    categoryId: 'other',
-    unitId: getCategory('other').units[0]!.id,
+    categoryId: AUTO,
+    unitId: AUTO,
   });
   const [response, setResponse] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -229,18 +229,32 @@ export function App() {
     for (let i = 0; i < list.length; i++) {
       if (bulkCancel.current) break;
       const f = list[i]!;
-      const cat = getCategory(f.categoryId);
-      const unit = getUnit(cat, f.unitId);
+      const cat = resolveCategory(f.categoryId, f.query.keyword);
       try {
         const res = await searchApi(validateSearchQuery(f.query as unknown as Record<string, unknown>), token);
-        const ranking = rankProducts({ products: res.products, category: cat, unit, settings, overrides, sortKey: 'unitPrice' });
-        const best = f.kind === 'product' ? ranking.main.find((r) => r.product.itemCode === f.itemCode) : ranking.main[0];
+        const ranking = rankByUnits({ products: res.products, category: cat, unitId: f.unitId, settings, overrides, sortKey: 'unitPrice' });
+        const primary = ranking.groups[0];
+        let best: RankedRow | undefined;
+        let bestGroup = primary;
+        if (f.kind === 'product') {
+          for (const g of ranking.groups) {
+            const hit = g.main.find((r) => r.product.itemCode === f.itemCode);
+            if (hit) {
+              best = hit;
+              bestGroup = g;
+              break;
+            }
+          }
+        } else {
+          best = primary?.main[0];
+        }
         results.set(f.id, {
           at: res.fetchedAt,
           mode: res.mode,
           bestUnitPrice: best?.unitPrice ?? null,
           bestItemName: best?.product.itemName.slice(0, 60) ?? (f.kind === 'product' ? '（検索結果に見つかりません）' : null),
-          comparedCount: ranking.main.length,
+          comparedCount: primary?.main.length ?? 0,
+          unitLabel: bestGroup?.unit.label,
         });
       } catch (e) {
         results.set(f.id, {

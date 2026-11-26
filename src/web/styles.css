@@ -309,23 +309,17 @@ label.check {
   font-size: 16px;
 }
 .inline-fields {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 10px;
-  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-top: 8px;
 }
-.inline-fields .btn.link {
-  grid-column: 1 / -1;
-  justify-self: start;
-}
-@media (min-width: 640px) {
-  .inline-fields {
-    grid-template-columns: 220px 180px auto;
-  }
-  .inline-fields .btn.link {
-    grid-column: auto;
-  }
+.auto-note {
+  font-size: 13px;
+  color: var(--muted);
+  min-width: 0;
 }
 .advanced {
   border: none;

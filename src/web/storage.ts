@@ -82,6 +82,8 @@ export interface FavoriteCheck {
   bestUnitPrice: number | null;
   bestItemName: string | null;
   comparedCount: number;
+  /** 比較に使った単位（例: 100mlあたり） */
+  unitLabel?: string;
   error?: string;
 }
 
@@ -114,8 +116,8 @@ export function loadFavorites(): Favorite[] | null {
       label: typeof f.label === 'string' ? f.label.slice(0, 100) : query.keyword,
       kind: f.kind === 'product' ? 'product' : 'search',
       query,
-      categoryId: String(f.categoryId ?? 'other'),
-      unitId: String(f.unitId ?? ''),
+      categoryId: typeof f.categoryId === 'string' && f.categoryId ? f.categoryId : 'auto',
+      unitId: typeof f.unitId === 'string' && f.unitId ? f.unitId : 'auto',
       targetUnitPrice: f.targetUnitPrice !== null && Number.isFinite(target) && target > 0 ? target : null,
       itemCode: typeof f.itemCode === 'string' ? f.itemCode : undefined,
       createdAt: String(f.createdAt ?? ''),

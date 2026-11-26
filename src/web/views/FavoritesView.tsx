@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CATEGORIES, getCategory, getUnit } from '../../shared/quantity/categories';
+import { ALL_UNITS, AUTO, CATEGORIES, findUnit, resolveCategory } from '../../shared/quantity/categories';
 import type { Favorite } from '../storage';
 import { dateTime, unitYen } from '../format';
 
@@ -12,6 +12,9 @@ interface Props {
   onCancelBulk: () => void;
 }
 
+/** 自動単位のお気に入りは、直近の確認で使った単位を表示 */
+const lcUnit = (f: Favorite): string | undefined => (f.unitId === AUTO ? f.lastCheck?.unitLabel : undefined);
+
 export function FavoritesView({ favorites, onChange, onOpen, onBulkCheck, bulkProgress, onCancelBulk }: Props) {
   const [editing, setEditing] = useState<string | null>(null);
   const [newKeyword, setNewKeyword] = useState('');
@@ -23,7 +26,6 @@ export function FavoritesView({ favorites, onChange, onOpen, onBulkCheck, bulkPr
   const add = () => {
     const kw = newKeyword.trim();
     if (!kw) return;
-    const cat = CATEGORIES.find((c) => c.keywords.some((w) => kw.includes(w))) ?? getCategory('other');
     onChange([
       ...favorites,
       {
@@ -31,8 +33,8 @@ export function FavoritesView({ favorites, onChange, onOpen, onBulkCheck, bulkPr
         label: kw,
         kind: 'search',
         query: { keyword: kw, inStockOnly: true, pages: 1, apiSort: 'standard' },
-        categoryId: cat.id,
-        unitId: cat.units[0]!.id,
+        categoryId: AUTO,
+        unitId: AUTO,
         targetUnitPrice: null,
         createdAt: new Date().toISOString(),
       },
@@ -78,8 +80,9 @@ export function FavoritesView({ favorites, onChange, onOpen, onBulkCheck, bulkPr
 
       <ul className="fav-list">
         {favorites.map((f) => {
-          const cat = getCategory(f.categoryId);
-          const unit = getUnit(cat, f.unitId);
+          const cat = resolveCategory(f.categoryId, f.query.keyword);
+          const fixedUnit = findUnit(f.unitId);
+          const unitLabel = fixedUnit?.label ?? lcUnit(f) ?? '自動';
           const lc = f.lastCheck;
           const hit = lc && f.targetUnitPrice !== null && lc.bestUnitPrice !== null && lc.bestUnitPrice <= f.targetUnitPrice;
           return (
@@ -89,8 +92,8 @@ export function FavoritesView({ favorites, onChange, onOpen, onBulkCheck, bulkPr
                   <span className="tag">{f.kind === 'product' ? '商品' : '検索条件'}</span> {f.label}
                 </div>
                 <div className="meta">
-                  {cat.label}・{unit.label}
-                  {f.targetUnitPrice !== null && `・目標 ${unitYen(f.targetUnitPrice)}`}
+                  {cat.label}・{fixedUnit ? fixedUnit.label : '単位は自動'}
+                  {f.targetUnitPrice !== null && `・目標 ${unitYen(f.targetUnitPrice)}（${unitLabel}）`}
                 </div>
                 {lc && (
                   <div className="fav-check">
@@ -98,7 +101,7 @@ export function FavoritesView({ favorites, onChange, onOpen, onBulkCheck, bulkPr
                       <span className="error-text">{lc.error}</span>
                     ) : (
                       <>
-                        最安 {unitYen(lc.bestUnitPrice)}（{unit.label}）
+                        最安 {unitYen(lc.bestUnitPrice)}（{lc.unitLabel ?? unitLabel}）
                         {lc.bestItemName && <span className="fav-best">{lc.bestItemName}</span>}
                         {hit && <strong className="hit-badge">目標達成</strong>}
                       </>
@@ -145,14 +148,20 @@ export function FavoritesView({ favorites, onChange, onOpen, onBulkCheck, bulkPr
                   </label>
                   <div className="grid2">
                     <label>
-                      カテゴリ
-                      <select
-                        value={f.categoryId}
-                        onChange={(e) => {
-                          const c = getCategory(e.target.value);
-                          update(f.id, { categoryId: c.id, unitId: c.units[0]!.id });
-                        }}
-                      >
+                      比較単位
+                      <select value={f.unitId} onChange={(e) => update(f.id, { unitId: e.target.value })} aria-label="比較単位">
+                        <option value={AUTO}>自動（おすすめ）</option>
+                        {ALL_UNITS.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.label}に固定
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      カテゴリ（税率の判定用）
+                      <select value={f.categoryId} onChange={(e) => update(f.id, { categoryId: e.target.value })} aria-label="カテゴリ">
+                        <option value={AUTO}>自動（{cat.label}）</option>
                         {CATEGORIES.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.label}
@@ -160,19 +169,9 @@ export function FavoritesView({ favorites, onChange, onOpen, onBulkCheck, bulkPr
                         ))}
                       </select>
                     </label>
-                    <label>
-                      比較単位
-                      <select value={unit.id} onChange={(e) => update(f.id, { unitId: e.target.value })}>
-                        {cat.units.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
                   </div>
                   <label>
-                    目標単価（円／{unit.label}）
+                    目標単価（円／{unitLabel}）
                     <input
                       inputMode="decimal"
                       value={f.targetUnitPrice ?? ''}

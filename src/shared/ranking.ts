@@ -6,6 +6,9 @@ import { calculatePrice, unitPrice, type PriceResult, type TierResult } from './
 import type { ItemOverride, UserSettings } from './pricing/settings';
 import { parseQuantity } from './quantity/parser';
 import {
+  AUTO,
+  chooseUnit,
+  findUnit,
   selectAmount,
   type Category,
   type ComparisonUnit,
@@ -79,8 +82,10 @@ export function buildRow(
   settings: UserSettings,
   override: ItemOverride | undefined,
   now: Date,
+  parsedInput?: QuantityParseResult,
 ): RankedRow {
-  const parsed = applyQuantityOverride(parseQuantity(product.itemName, product.itemCaption), override);
+  const parsed =
+    parsedInput ?? applyQuantityOverride(parseQuantity(product.itemName, product.itemCaption), override);
   const selected = selectAmount(parsed, unit);
   const price = calculatePrice({
     product,
@@ -214,4 +219,92 @@ export function rankProducts(params: {
     unrankable: sortRows(kept.filter((r) => r.group === 'unrankable'), 'payment', 'unrankable'),
     filteredOut,
   };
+}
+
+/** 比較単位ごとのランキング */
+export interface UnitRanking {
+  unit: ComparisonUnit;
+  main: RankedRow[];
+  shippingUnknown: RankedRow[];
+}
+
+export interface MultiRankingResult {
+  /** 先頭が主たる比較単位（商品数が最も多い単位） */
+  groups: UnitRanking[];
+  unrankable: RankedRow[];
+  filteredOut: number;
+  /** 比較単位を自動選択したか */
+  auto: boolean;
+}
+
+function passesFilters(r: RankedRow, filters: RankingFilters): boolean {
+  if (filters.packageKind && filters.packageKind !== 'all' && r.quantity.packageKind !== filters.packageKind) {
+    return false;
+  }
+  // 量が不明な商品は除外せず残す（不明を条件外と断定しない）
+  if (filters.minTotalAmount && filters.minTotalAmount > 0 && r.selected && r.selected.total < filters.minTotalAmount) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * unitId が 'auto' なら商品ごとに比較単位を自動選択し、単位ごとにランキングを作る。
+ * 単位を指定した場合はその単位 1 つのランキング（従来どおり）。
+ */
+export function rankByUnits(params: {
+  products: Product[];
+  category: Category;
+  unitId: string;
+  settings: UserSettings;
+  overrides: Record<string, ItemOverride>;
+  sortKey: SortKey;
+  filters?: RankingFilters;
+  now?: Date;
+}): MultiRankingResult {
+  const { products, category, settings, overrides, sortKey, filters = {}, now = new Date() } = params;
+  const fixed = params.unitId === AUTO ? null : findUnit(params.unitId);
+  if (fixed) {
+    const r = rankProducts({ ...params, unit: fixed, filters, now });
+    return {
+      groups: [{ unit: fixed, main: r.main, shippingUnknown: r.shippingUnknown }],
+      unrankable: r.unrankable,
+      filteredOut: r.filteredOut,
+      auto: false,
+    };
+  }
+
+  const byUnit = new Map<string, { unit: ComparisonUnit; rows: RankedRow[] }>();
+  const unrankable: RankedRow[] = [];
+  let filteredOut = 0;
+  for (const p of products) {
+    const override = overrides[p.itemCode];
+    const parsed = applyQuantityOverride(parseQuantity(p.itemName, p.itemCaption), override);
+    const unit = chooseUnit(parsed, category) ?? category.units[0]!;
+    const row = buildRow(p, category, unit, settings, override, now, parsed);
+    if (!passesFilters(row, filters)) {
+      filteredOut++;
+      continue;
+    }
+    if (row.group === 'unrankable') {
+      unrankable.push(row);
+      continue;
+    }
+    const entry = byUnit.get(unit.id) ?? { unit, rows: [] };
+    entry.rows.push(row);
+    byUnit.set(unit.id, entry);
+  }
+
+  const catOrder = (u: ComparisonUnit) => {
+    const i = category.units.findIndex((c) => c.id === u.id);
+    return i < 0 ? 99 : i;
+  };
+  const groups = [...byUnit.values()]
+    .sort((a, b) => b.rows.length - a.rows.length || catOrder(a.unit) - catOrder(b.unit))
+    .map(({ unit, rows }) => ({
+      unit,
+      main: sortRows(rows.filter((r) => r.group === 'main'), sortKey, 'main'),
+      shippingUnknown: sortRows(rows.filter((r) => r.group === 'shippingUnknown'), sortKey, 'shippingUnknown'),
+    }));
+  return { groups, unrankable: sortRows(unrankable, 'payment', 'unrankable'), filteredOut, auto: true };
 }

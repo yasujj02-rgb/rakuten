@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { rankProducts, sortRows } from '../../src/shared/ranking';
+import { rankByUnits, rankProducts, sortRows } from '../../src/shared/ranking';
 import { DEFAULT_SETTINGS } from '../../src/shared/pricing/settings';
-import { getCategory, getUnit, guessCategory, selectAmount } from '../../src/shared/quantity/categories';
+import { chooseUnit, getCategory, getUnit, guessCategory, resolveCategory, selectAmount } from '../../src/shared/quantity/categories';
 import { parseQuantity } from '../../src/shared/quantity/parser';
 import type { Product } from '../../src/shared/types';
 
@@ -130,6 +130,8 @@ describe('カテゴリ', () => {
     expect(guessCategory('長期保存食').id).toBe('emergency-food');
     expect(guessCategory('ティッシュペーパー').id).toBe('tissue');
     expect(guessCategory('なにか').id).toBe('other');
+    expect(guessCategory('洗剤').id).toBe('liquid-detergent');
+    expect(guessCategory('粉末洗剤 3kg').id).toBe('powder-detergent');
   });
   it('携帯トイレで個数のみの場合は「1個=1回」と仮定して要確認', () => {
     const s = selectAmount(parseQuantity('携帯トイレ 30個入'), getUnit(getCategory('portable-toilet')));
@@ -143,5 +145,68 @@ describe('カテゴリ', () => {
   });
   it('異なる次元は選択されない', () => {
     expect(selectAmount(parseQuantity('洗剤 400g'), getUnit(cat))).toBeNull();
+  });
+});
+
+describe('比較単位の自動選択', () => {
+  const auto = (products: Product[], categoryId = 'liquid-detergent', unitId = 'auto') =>
+    rankByUnits({ products, category: getCategory(categoryId), unitId, settings: DEFAULT_SETTINGS, overrides: {}, sortKey: 'unitPrice', now: NOW });
+
+  it('商品ごとの単位: カテゴリ単位 → 主要次元の既定単位 → 個数', () => {
+    const liquid = getCategory('liquid-detergent');
+    expect(chooseUnit(parseQuantity('柔軟剤 1.2L×6袋'), liquid)!.id).toBe('ml100');
+    expect(chooseUnit(parseQuantity('粉末洗剤 0.9kg'), liquid)!.id).toBe('g100');
+    expect(chooseUnit(parseQuantity('ペーパー 50m×12ロール'), liquid)!.id).toBe('m1');
+    expect(chooseUnit(parseQuantity('洗剤 6個セット'), liquid)).toBeNull();
+    // その他カテゴリでも ml の商品は個数ではなく ml で比較
+    expect(chooseUnit(parseQuantity('なにか 500ml×3本'), getCategory('other'))!.id).toBe('ml100');
+    expect(chooseUnit(parseQuantity('なにか 3個セット'), getCategory('other'))!.id).toBe('piece1');
+    // 粉末洗剤は「0.9kg 約45回分」でも g を優先
+    expect(chooseUnit(parseQuantity('粉末洗剤 0.9kg 約45回分'), getCategory('powder-detergent'))!.id).toBe('g100');
+    // 携帯トイレは個数のみでも「回」（要確認）
+    expect(chooseUnit(parseQuantity('携帯トイレ 30個入'), getCategory('portable-toilet'))!.id).toBe('use1');
+  });
+
+  it('L と ml、kg と g は換算して同じランキングに入る', () => {
+    const r = auto([prod('柔軟剤 1.2L×3', 1500), prod('柔軟剤 400ml×2', 600), prod('柔軟剤 2000ml', 900)]);
+    expect(r.groups).toHaveLength(1);
+    expect(r.groups[0]!.unit.id).toBe('ml100');
+    expect(r.groups[0]!.main).toHaveLength(3);
+  });
+
+  it('ml と g は混ぜず、件数の多い単位を主ランキングにする', () => {
+    const r = auto([prod('洗剤 1.2L', 500), prod('洗剤 400g', 300), prod('洗剤 900g', 500), prod('洗剤 2kg', 900)]);
+    expect(r.groups.map((g) => [g.unit.id, g.main.length])).toEqual([
+      ['g100', 3],
+      ['ml100', 1],
+    ]);
+  });
+
+  it('同数ならカテゴリの単位を優先', () => {
+    const r = auto([prod('洗剤 400g', 300), prod('洗剤 1.2L', 500)]);
+    expect(r.groups[0]!.unit.id).toBe('ml100');
+  });
+
+  it('内容量不明は比較対象外、送料不明は各単位の中で別枠', () => {
+    const r = auto([
+      prod('洗剤 1.2L', 500),
+      prod('洗剤 1.2L', 400, { shipping: { kind: 'separate', amount: null } }),
+      prod('【選べる】洗剤 400ml/1200ml', 500),
+    ]);
+    expect(r.groups[0]!.main).toHaveLength(1);
+    expect(r.groups[0]!.shippingUnknown).toHaveLength(1);
+    expect(r.unrankable).toHaveLength(1);
+  });
+
+  it('単位を指定すれば従来どおり 1 つのランキング', () => {
+    const r = auto([prod('洗剤 1.2L', 500), prod('洗剤 400g', 300)], 'liquid-detergent', 'ml100');
+    expect(r.auto).toBe(false);
+    expect(r.groups).toHaveLength(1);
+    expect(r.unrankable).toHaveLength(1);
+  });
+
+  it('カテゴリ auto はキーワードから推定', () => {
+    expect(resolveCategory('auto', 'トイレットペーパー').id).toBe('toilet-paper');
+    expect(resolveCategory('food', 'トイレットペーパー').id).toBe('food');
   });
 });

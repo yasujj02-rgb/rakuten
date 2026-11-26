@@ -73,6 +73,7 @@ describe('parseQuantity: 誤認識の防止', () => {
     expect(r.totalAmount).toBeNull();
     expect(r.confidence).toBe('unknown');
     expect(r.reasons.join()).toContain('選択');
+    expect(r.candidateDimension).toBe('volume');
   });
   it('本体と詰め替えのセットを単純合計しない', () => {
     const r = parseQuantity('食器用洗剤 本体 240ml＋詰め替え 770ml×2');

@@ -54,6 +54,8 @@ export interface QuantityParseResult {
   source: 'name' | 'caption' | 'manual' | 'none';
   /** 抽出に使ったトークン（デバッグ・説明用） */
   matchedText: string[];
+  /** 容量を特定できなかったが表記されていた次元（手動補正フォームの既定単位に使う） */
+  candidateDimension?: Dimension | null;
 }
 
 /** 送料情報 */

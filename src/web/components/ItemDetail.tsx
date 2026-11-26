@@ -37,7 +37,7 @@ export function ItemDetail({ row, unit, override, onOverride }: Props) {
   const ref = price.tiers.reference;
   const q = override?.quantity;
   const [form, setForm] = useState({
-    dimension: (q?.dimension ?? quantity.dimension ?? unit.dimension) as Dimension,
+    dimension: (q?.dimension ?? quantity.dimension ?? quantity.candidateDimension ?? unit.dimension) as Dimension,
     perUnit: String(q?.perUnit ?? quantity.unitAmount ?? ''),
     setCount: String(q?.setCount ?? quantity.setCount ?? 1),
     shippingYen: override?.shippingYen?.toString() ?? '',

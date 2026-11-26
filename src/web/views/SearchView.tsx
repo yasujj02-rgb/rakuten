@@ -1,8 +1,8 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { TIER_LABELS } from '../../shared/pricing/engine';
 import type { ItemOverride, UserSettings } from '../../shared/pricing/settings';
-import { CATEGORIES, getCategory, getUnit, guessCategory } from '../../shared/quantity/categories';
-import { rankProducts, type RankedRow } from '../../shared/ranking';
+import { ALL_UNITS, AUTO, CATEGORIES, resolveCategory } from '../../shared/quantity/categories';
+import { rankByUnits, type RankedRow, type UnitRanking } from '../../shared/ranking';
 import type { ApiSort, SearchQuery, SearchResponse, SortKey } from '../../shared/types';
 import type { Favorite, HistoryEntry } from '../storage';
 import { Results } from '../components/Results';
@@ -67,23 +67,22 @@ export function SearchView(p: Props) {
   const { state } = p;
   const [packageKind, setPackageKind] = useState<'all' | 'body' | 'refill'>('all');
   const [minAmount, setMinAmount] = useState('');
-  const category = getCategory(state.categoryId);
-  const unit = getUnit(category, state.unitId);
+  const category = resolveCategory(state.categoryId, state.query.keyword);
 
   const setQuery = (patch: Partial<SearchQuery>) => p.onStateChange({ ...state, query: { ...state.query, ...patch } });
 
   const ranking = useMemo(() => {
     if (!p.response) return null;
-    return rankProducts({
+    return rankByUnits({
       products: p.response.products,
       category,
-      unit,
+      unitId: state.unitId,
       settings: p.settings,
       overrides: p.overrides,
       sortKey: p.sortKey,
       filters: { packageKind, minTotalAmount: Number(minAmount) > 0 ? Number(minAmount) : null },
     });
-  }, [p.response, category, unit, p.settings, p.overrides, p.sortKey, packageKind, minAmount]);
+  }, [p.response, category, state.unitId, p.settings, p.overrides, p.sortKey, packageKind, minAmount]);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -96,15 +95,17 @@ export function SearchView(p: Props) {
   const target = favForQuery?.targetUnitPrice ?? null;
 
   const resultsProps = {
-    unit,
     mode: p.response?.mode ?? 'mock',
     affiliateEnabled: p.affiliateEnabled,
     overrides: p.overrides,
     onOverride: p.onOverride,
     isFavorite: (code: string) => p.favorites.some((f) => f.itemCode === code),
     onToggleFavorite: (row: RankedRow) => p.onToggleFavorite(row, state),
-    targetUnitPrice: target,
   } as const;
+
+  /** 目標単価はお気に入りの単位と一致する（または自動）ランキングにのみ適用 */
+  const targetFor = (g: UnitRanking, i: number) =>
+    target !== null && (favForQuery?.unitId === g.unit.id || (favForQuery?.unitId === AUTO && i === 0)) ? target : null;
 
   return (
     <div className="view">
@@ -115,18 +116,7 @@ export function SearchView(p: Props) {
             name="keyword"
             placeholder="商品名・キーワード（例: 柔軟剤 詰め替え）"
             value={state.query.keyword}
-            onChange={(e) => {
-              const keyword = e.target.value;
-              const guessed = guessCategory(keyword);
-              // カテゴリ未選択（その他）の場合のみ自動推定で切り替える
-              p.onStateChange({
-                ...state,
-                query: { ...state.query, keyword },
-                ...(state.categoryId === 'other' && guessed.id !== 'other'
-                  ? { categoryId: guessed.id, unitId: guessed.units[0]!.id }
-                  : {}),
-              });
-            }}
+            onChange={(e) => setQuery({ keyword: e.target.value })}
             aria-label="検索キーワード"
             maxLength={100}
             enterKeyHint="search"
@@ -137,33 +127,9 @@ export function SearchView(p: Props) {
         </div>
 
         <div className="inline-fields">
-          <label>
-            カテゴリ
-            <select
-              value={state.categoryId}
-              onChange={(e) => {
-                const c = getCategory(e.target.value);
-                p.onStateChange({ ...state, categoryId: c.id, unitId: c.units[0]!.id });
-              }}
-              aria-label="カテゴリ"
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            比較単位
-            <select value={unit.id} onChange={(e) => p.onStateChange({ ...state, unitId: e.target.value })} aria-label="比較単位">
-              {category.units.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <span className="auto-note">
+            比較単位: {state.unitId === AUTO ? '自動（検索結果の内容量から選択）' : ALL_UNITS.find((u) => u.id === state.unitId)?.label}
+          </span>
           <button type="button" className="btn link" onClick={() => p.onShowAdvanced(!p.showAdvanced)} aria-expanded={p.showAdvanced}>
             {p.showAdvanced ? '詳細条件を閉じる' : '詳細条件'}
           </button>
@@ -172,6 +138,30 @@ export function SearchView(p: Props) {
         {p.showAdvanced && (
           <fieldset className="advanced">
             <legend>詳細条件</legend>
+            <div className="grid2">
+              <label>
+                比較単位
+                <select value={state.unitId} onChange={(e) => p.onStateChange({ ...state, unitId: e.target.value })} aria-label="比較単位">
+                  <option value={AUTO}>自動（おすすめ）</option>
+                  {ALL_UNITS.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.label}に固定
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                カテゴリ（税率の判定用）
+                <select value={state.categoryId} onChange={(e) => p.onStateChange({ ...state, categoryId: e.target.value })} aria-label="カテゴリ">
+                  <option value={AUTO}>自動（{category.label}）</option>
+                  {CATEGORIES.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <label>
               除外キーワード
               <input value={state.query.ngKeyword ?? ''} onChange={(e) => setQuery({ ngKeyword: e.target.value || undefined })} maxLength={100} />
@@ -224,7 +214,7 @@ export function SearchView(p: Props) {
                 </select>
               </label>
               <label>
-                最低内容量（{unit.symbol}・表示の絞り込み）
+                最低内容量（ml・g・m・枚など・表示の絞り込み）
                 <input inputMode="decimal" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} />
               </label>
             </div>
@@ -271,10 +261,7 @@ export function SearchView(p: Props) {
                     key={h.at + h.query.keyword}
                     type="button"
                     className="chip"
-                    onClick={() => {
-                      const c = getCategory(h.categoryId);
-                      p.onSearch({ query: h.query, categoryId: c.id, unitId: c.units[0]!.id });
-                    }}
+                    onClick={() => p.onSearch({ query: h.query, categoryId: h.categoryId, unitId: AUTO })}
                   >
                     {h.query.keyword}
                   </button>
@@ -307,10 +294,7 @@ export function SearchView(p: Props) {
                   key={kw}
                   type="button"
                   className="chip"
-                  onClick={() => {
-                    const c = getCategory(cid);
-                    p.onSearch({ query: { ...state.query, keyword: kw }, categoryId: c.id, unitId: c.units[0]!.id });
-                  }}
+                  onClick={() => p.onSearch({ query: { ...state.query, keyword: kw }, categoryId: cid, unitId: AUTO })}
                 >
                   {kw}
                 </button>
@@ -379,37 +363,59 @@ export function SearchView(p: Props) {
               {n}
             </div>
           ))}
-          {target !== null && <p className="hint">目標単価 {target}円（{unit.label}）以下の商品を強調表示しています。</p>}
           {ranking.filteredOut > 0 && <p className="hint">表示条件により {ranking.filteredOut}件を非表示にしています。</p>}
 
-          {ranking.main.length === 0 && ranking.shippingUnknown.length === 0 && ranking.unrankable.length === 0 && (
-            <p className="empty">該当する商品がありません。</p>
-          )}
+          {ranking.groups.length === 0 && ranking.unrankable.length === 0 && <p className="empty">該当する商品がありません。</p>}
 
-          {ranking.main.length > 0 && (
-            <>
-              <h3 className="group-title">
-                ランキング（{TIER_LABELS[p.settings.rankingTier]}）<span className="count">{ranking.main.length}件</span>
-              </h3>
-              <Results rows={ranking.main} group="main" {...resultsProps} />
-            </>
-          )}
-          {ranking.shippingUnknown.length > 0 && (
-            <details className="group" open={ranking.main.length === 0}>
-              <summary>
-                送料不明の商品 <span className="count">{ranking.shippingUnknown.length}件</span>
-                <small>送料別で金額を取得できないため、送料を含まない参考値で並べています</small>
-              </summary>
-              <Results rows={ranking.shippingUnknown} group="shippingUnknown" {...resultsProps} />
-            </details>
-          )}
+          {ranking.groups.map((g, i) => {
+            const count = g.main.length + g.shippingUnknown.length;
+            const t = targetFor(g, i);
+            const body = (
+              <>
+                {t !== null && <p className="hint">目標単価 {t}円（{g.unit.label}）以下の商品を強調表示しています。</p>}
+                {g.main.length > 0 && <Results rows={g.main} group="main" unit={g.unit} targetUnitPrice={t} {...resultsProps} />}
+                {g.shippingUnknown.length > 0 && (
+                  <details className="group" open={g.main.length === 0}>
+                    <summary>
+                      送料不明の商品 <span className="count">{g.shippingUnknown.length}件</span>
+                      <small>送料別で金額を取得できないため、送料を含まない参考値で並べています</small>
+                    </summary>
+                    <Results rows={g.shippingUnknown} group="shippingUnknown" unit={g.unit} targetUnitPrice={t} {...resultsProps} />
+                  </details>
+                )}
+              </>
+            );
+            if (i === 0) {
+              return (
+                <div key={g.unit.id} className="unit-group">
+                  <h3 className="group-title" data-testid="primary-unit">
+                    {g.unit.label}で比較（{TIER_LABELS[p.settings.rankingTier]}）<span className="count">{count}件</span>
+                  </h3>
+                  {ranking.auto && ranking.groups.length > 1 && (
+                    <p className="hint">比較単位は件数の最も多い「{g.unit.label}」を自動で選びました。別の単位の商品は下に分けて表示しています。</p>
+                  )}
+                  {body}
+                </div>
+              );
+            }
+            return (
+              <details key={g.unit.id} className="group unit-group">
+                <summary>
+                  {g.unit.label}で比較できる商品 <span className="count">{count}件</span>
+                  <small>単位が異なる（例: ml と g）ため、上のランキングとは混ぜずに比較しています</small>
+                </summary>
+                {body}
+              </details>
+            );
+          })}
+
           {ranking.unrankable.length > 0 && (
             <details className="group">
               <summary>
-                比較対象外（判定不能・単位違い） <span className="count">{ranking.unrankable.length}件</span>
+                比較対象外（内容量を判定できない商品） <span className="count">{ranking.unrankable.length}件</span>
                 <small>「内訳・補正」から内容量を手動で修正するとランキングに入ります</small>
               </summary>
-              <Results rows={ranking.unrankable} group="unrankable" {...resultsProps} />
+              <Results rows={ranking.unrankable} group="unrankable" unit={ranking.groups[0]?.unit ?? category.units[0]!} {...resultsProps} />
             </details>
           )}
         </section>
