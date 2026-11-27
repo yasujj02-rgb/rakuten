@@ -69,11 +69,24 @@ function buildHeaders(env: Env): Headers {
   return h;
 }
 
+/**
+ * 上流のメッセージは値を含む可能性があるためそのまま返さず、
+ * どの項目の問題かだけをヒントとして付ける。
+ */
+function hintFor(message: string): string {
+  if (/referr?er/i.test(message)) return '・許可サイト（RAKUTEN_REFERER）を確認';
+  if (/accessKey/i.test(message)) return '・アクセスキーを確認';
+  if (/applicationId/i.test(message)) return '・アプリIDを確認';
+  if (/keyword/i.test(message)) return '・キーワードを確認';
+  return '';
+}
+
 function mapHttpError(status: number, body: unknown): AppError {
   const parsed = parseRakutenError(body);
   const code = parsed?.code ?? '';
-  // 秘密情報を含む可能性があるため上流のメッセージはそのまま返さず、コードのみ付加する
-  const suffix = code ? `（${code.replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 64)}）` : '';
+  const safeCode = code.replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 64);
+  const hint = hintFor(parsed?.message ?? '');
+  const suffix = safeCode || hint ? `（${safeCode}${hint}）` : '';
   if (status === 429) return new AppError('upstream_rate_limited', `楽天APIのアクセス上限に達しました。少し待ってから再検索してください${suffix}`, 429, true);
   if (status === 401 || status === 403) return new AppError('upstream_auth', `楽天APIの認証に失敗しました。アプリID・アクセスキー・許可サイト（Referer）設定を確認してください${suffix}`, 502);
   if (status === 400 || status === 404) {

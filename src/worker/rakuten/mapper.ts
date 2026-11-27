@@ -121,16 +121,27 @@ export function mapSearchResponse(body: unknown, fetchedAt: string): MappedPage 
   };
 }
 
-/** エラー応答の解析（ドキュメント記載形式と実際の返却形式の両方に対応） */
+const codeStr = (v: unknown): string | null => str(v) ?? (typeof v === 'number' ? String(v) : null);
+
+/**
+ * エラー応答の解析。次の形式に対応:
+ *  - {error, error_description}（旧ドキュメント記載）
+ *  - {errors: {errorCode: 400, errorMessage}}（2026-11-27 に実 API で確認した形式。errorCode は数値）
+ *  - {errors: [{errorCode, errorMessage}]}（配列形式の報告あり）
+ */
 export function parseRakutenError(body: unknown): { code: string; message: string } | null {
   if (!body || typeof body !== 'object') return null;
   const b = body as Raw;
   if (typeof b.error === 'string') {
     return { code: b.error, message: str(b.error_description) ?? '' };
   }
-  if (Array.isArray(b.errors) && b.errors.length > 0) {
-    const e = b.errors[0] as Raw;
-    return { code: str(e.errorCode) ?? str(e.code) ?? 'unknown', message: str(e.errorMessage) ?? str(e.message) ?? '' };
+  const errs = Array.isArray(b.errors) ? b.errors[0] : b.errors;
+  if (errs && typeof errs === 'object') {
+    const e = errs as Raw;
+    return {
+      code: codeStr(e.errorCode) ?? codeStr(e.code) ?? 'unknown',
+      message: str(e.errorMessage) ?? str(e.message) ?? '',
+    };
   }
   if (b.error && typeof b.error === 'object') {
     const e = b.error as Raw;

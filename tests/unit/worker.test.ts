@@ -104,6 +104,10 @@ describe('mapper', () => {
       code: 'REQUEST_CONTEXT_BODY_HTTP_REFERRER_MISSING',
       message: 'x',
     });
+    expect(parseRakutenError({ errors: { errorCode: 400, errorMessage: 'accessKey must be present as a query parameter or in the header' } })).toEqual({
+      code: '400',
+      message: 'accessKey must be present as a query parameter or in the header',
+    });
     expect(parseRakutenError({ Items: [] })).toBeNull();
   });
 });
@@ -329,6 +333,14 @@ describe('API: 検索（実APIモード）', () => {
     expect(res.status).toBe(status);
     const text = await res.text();
     expect(JSON.parse(text).error.code).toBe(code);
+    expect(text).not.toContain('pk_access_secret');
+  });
+  it('実 API の形式（errors オブジェクト・数値コード）から項目のヒントを付け、値は返さない', async () => {
+    const f = vi.fn(async () => new Response(JSON.stringify({ errors: { errorCode: 400, errorMessage: 'accessKey pk_access_secret is invalid' } }), { status: 400 }));
+    const app = makeApp(f);
+    const res = await app.fetch(req('/api/search?keyword=柔軟剤'), LIVE_ENV);
+    const text = await res.text();
+    expect(JSON.parse(text).error.message).toContain('（400・アクセスキーを確認）');
     expect(text).not.toContain('pk_access_secret');
   });
   it('not_found は空の結果', async () => {

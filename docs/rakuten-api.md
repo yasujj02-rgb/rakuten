@@ -1,6 +1,21 @@
 # 楽天市場商品検索 API の利用メモ
 
-最終確認日: 2026-11-25
+最終確認日: 2026-11-27
+
+## 2026-11-27 時点の状況
+
+- **楽天ウェブサービスの管理画面（UIポータル）は 2026-11-09 からメンテナンスで停止中、復旧時期は未定**（楽天ウェブサービス公式ブログの告知。
+  開発環境・ユーザー環境の双方から `webservice.rakuten.co.jp` は HTTP 503）。この間は**新規アプリ登録・アクセスキーの発行ができない**。
+  既存アプリによる API 利用は継続できるとされる。
+- API 本体（`openapi.rakuten.co.jp`）は応答している。認証情報なしのリクエストで次を確認した:
+
+| 確認内容 | 実際の応答 |
+|---|---|
+| `GET .../IchibaItem/Search/20260701?keyword=test`（ID なし） | HTTP 400 `{"errors":{"errorCode":400,"errorMessage":"applicationId must be present in the query parameter or request body"}}` |
+| 同（ダミーの applicationId のみ） | HTTP 400 `{"errors":{"errorCode":400,"errorMessage":"accessKey must be present as a query parameter or in the header"}}` |
+
+→ **applicationId はクエリ、accessKey はクエリまたはヘッダー**（実装の既定どおり）。エラーは `errors` が**オブジェクト**で `errorCode` が**数値**の形式（パーサー対応済み）。
+認証前に弾かれるため、バージョン（`20260701`）・ヘッダー名・Referer 要件は実キーでの接続まで未確認。
 
 ## 確認状況（重要）
 
@@ -12,10 +27,10 @@
 | 項目 | 実装での扱い | 確認状況 |
 |---|---|---|
 | エンドポイント | `https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260701`（`RAKUTEN_ENDPOINT` で変更可能） | ⚠ 2026-07-01 版の存在は楽天ウェブサービス公式ブログの記事タイトル・開発者記事で確認。パスは推定 |
-| 認証 | `applicationId` ＋ `accessKey` の両方が必須 | 複数の開発者記事で一致。⚠ 公式で再確認 |
-| accessKey の送り方 | 既定はクエリ `accessKey=`。`RAKUTEN_ACCESS_KEY_TRANSPORT=header` でヘッダー送信に切替 | ⚠ 公式の属性検索 API ページでは「ヘッダーまたはクエリ」と記載との情報あり。ヘッダー名は未確認 |
+| 認証 | `applicationId` ＋ `accessKey` の両方が必須 | ✅ 2026-11-27 に実 API のエラー応答で確認 |
+| accessKey の送り方 | 既定はクエリ `accessKey=`。`RAKUTEN_ACCESS_KEY_TRANSPORT=header` でヘッダー送信に切替 | ✅ クエリまたはヘッダーで受け付けると実 API が応答。⚠ ヘッダー名は未確認 |
 | Referer | アプリ登録時の許可サイト URL を `RAKUTEN_REFERER` で送信 | 開発者記事で「Referer が無いと `REQUEST_CONTEXT_BODY_HTTP_REFERRER_MISSING`」との報告。⚠ 公式で再確認 |
-| エラー形式 | `{error, error_description}` と `{errors:[{errorCode, errorMessage}]}` の両方を解析 | 開発者記事で「ドキュメントと実際の形式が異なる」との報告あり |
+| エラー形式 | `{error, error_description}`、`{errors:{errorCode, errorMessage}}`、配列形式のすべてを解析 | ✅ オブジェクト形式・数値コードを実 API で確認 |
 | レート制限 | Worker 内で上流リクエストを 1.1 秒間隔に直列化、429 は Retry-After を尊重して最大 2 回再試行 | 「1 秒に 1 回程度」との記述が複数あり。⚠ 公式で再確認 |
 | 1 ページの件数 | `hits=30`（最大値） | 2022-06-01 版の仕様 |
 | 最大ページ | アプリでは 3 ページ（90 件）まで。API 上限は 100 ページ | 2022-06-01 版の仕様 |
